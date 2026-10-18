@@ -193,6 +193,16 @@ function draw(){
 let running=false, paused=false, lastT=0, acc=0;
 function loop(ts){
   if(!running) return;
+  if(tick(ts)) requestAnimationFrame(loop);
+}
+// 방장 탭이 가려지면 브라우저가 requestAnimationFrame 을 멈춘다 → 방장이 계산하므로 모두 멈춤.
+// 숨겨진 동안은 Worker 타이머(백그라운드에서도 거의 안 늦춰짐)로 계산·스냅샷만 이어 간다.
+let bgWorker=null;
+try{
+  bgWorker=new Worker(URL.createObjectURL(new Blob(['setInterval(()=>postMessage(0),16)'],{type:'text/javascript'})));
+  bgWorker.onmessage=()=>{ if(running && document.hidden && netMode==='host') tick(performance.now()); };
+}catch(e){ setInterval(()=>{ if(running && document.hidden && netMode==='host') tick(performance.now()); },16); }
+function tick(ts){
   const dt=Math.min(0.05,(ts-lastT)/1000||0); lastT=ts;
   if(!paused){
     if(netMode==='client'){ clientStep(dt); }
@@ -205,11 +215,12 @@ function loop(ts){
     }
     frame++;
     const me=myChar();
+    if(document.hidden) return true;   // 안 보이는 동안은 그리지 않음
     if(me && frame % me.prof.drawEvery === 0) draw();
     updateHud();
-    if(world.over && netMode!=='client'){ endRound(); return; }
+    if(world.over && netMode!=='client'){ endRound(); return false; }
   }
-  requestAnimationFrame(loop);
+  return true;
 }
 let prevHp=MAX_HP, feedSeen=0;
 function teamLives(side){ return world.chars.filter(c=>c.side===side).reduce((a,c)=>a+c.lives,0); }
