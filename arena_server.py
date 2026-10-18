@@ -343,7 +343,7 @@ def broadcast_lobby():
 
 def room_view(r):
     return {"t": "room", "id": r["id"], "title": r["title"], "host": r["host"], "state": r["state"], "map": r.get("map", "snow"),
-            "dir": r.get("dir", ""), "mode": r.get("mode", "people"), "convert": r.get("convert"),
+            "dir": r.get("dir", ""), "mode": r.get("mode", "people"), "convert": r.get("convert"), "fill": r.get("fill", {"cpu": 0, "gpu": 0}),
             "botsOn": r.get("botsOn", False),
             "members": [{"id": c, "name": users.get(c, {}).get("name", "?"), "gone": users.get(c, {}).get("gone", False),
                          "b": r["slots"].get(c, {}).get("b"), "ready": r["slots"].get(c, {}).get("ready", False),
@@ -540,7 +540,8 @@ def handle_msg(cid, raw):
             next_rid += 1
             rooms[rid] = {"id": rid, "title": title, "pw": pw, "host": cid, "members": [cid], "spect": [], "state": "waiting",
                           "map": "snow", "slots": {cid: {"b": obj.get("b"), "ready": False, "team": "cpu"}},
-                          "dir": make_room_dir(rid, title), "mode": mode, "botsOn": mode == "bots"}
+                          "dir": make_room_dir(rid, title), "mode": mode, "botsOn": mode == "bots",
+                          "fill": {"cpu": 0, "gpu": 0}}   # 빈자리에 방장이 [+] 로 넣은 봇 수 (자동으로 채우지 않음)
             u["room"] = rid
         print(f"  · 방 {rid} 생성: {title} [{'봇전' if mode == 'bots' else '학생 대전'}] (방장 {u['name']})")
         broadcast_room(rid)
@@ -600,6 +601,17 @@ def handle_msg(cid, raw):
             s["b"] = obj.get("b")
             if r["state"] == "waiting" and r["host"] != cid:
                 s["ready"] = False
+        broadcast_room(rid)
+        return
+
+    if t == "fill":          # 방장이 팀 빈자리에 [+] 봇 추가 / [−] 빼기
+        side = obj.get("side")
+        if not r or r["host"] != cid or r["state"] != "waiting" or side not in ("cpu", "gpu"):
+            return
+        with lock:
+            fill = r.setdefault("fill", {"cpu": 0, "gpu": 0})
+            room_left = 5 - team_count(r, side)
+            fill[side] = max(0, min(room_left, fill.get(side, 0) + (1 if obj.get("d", 1) > 0 else -1)))
         broadcast_room(rid)
         return
 

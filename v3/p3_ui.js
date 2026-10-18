@@ -363,9 +363,17 @@ function renderRoom(){
         const bs= side===mine? (i<allyGpu?'gpu':'cpu') : (i%2?'gpu':'cpu');
         d.innerHTML=`${portrait(null,bs,30)}<div class="nm">${side===mine?'아군':'상대'} ${i+1}<small>${bs==='cpu'?'CPU형':'GPU형'} 봇</small></div><span class="badge bot">봇</span>`; el.appendChild(d); }
     } else {
-      for(const b of (botMode? plan[side].filter(e=>!e.owner).map(e=>e.bot) : [])){ if(n>=5) break; n++; const d=document.createElement('div'); d.className='slot';
-        d.innerHTML=`${portrait(b.build&&b.build.ch,side,30)}<div class="nm">${esc(b.name)}<small>규칙 ${(b.rules||[]).length}개</small></div><span class="badge bot">규칙봇</span>`; el.appendChild(d); }
-      for(;n<5;n++){ const d=document.createElement('div'); d.className='slot empty'; d.textContent='빈 자리 — 기본 봇이 채웁니다'; el.appendChild(d); }
+      // 방장이 [+] 로 넣은 봇들 (봇전: 아직 안 나간 방 봇 → 없으면 기본 봇 / 학생 대전: 기본 봇)
+      const fills= botMode? plan[side].filter(e=>!e.owner) : Array.from({length:fillOf(side, list.length)},()=>({bot:null}));
+      for(const e of fills){ if(n>=5) break; n++; const b=e.bot, d=document.createElement('div'); d.className='slot';
+        d.innerHTML= b? `${portrait(b.build&&b.build.ch,side,30)}<div class="nm">${esc(b.name)}<small>규칙 ${(b.rules||[]).length}개</small></div><span class="badge bot">규칙봇</span>`
+                      : `${portrait(null,side,30)}<div class="nm">기본 봇<small>게임이 조종하는 봇</small></div><span class="badge bot">봇</span>`;
+        if(host&&!playing){ const x=document.createElement('button'); x.className='btn sm'; x.textContent='−'; x.title='이 봇 빼기'; x.style.marginLeft='6px';
+          x.onclick=()=>net.send({t:'fill',side,d:-1}); d.appendChild(x); }
+        el.appendChild(d); }
+      for(;n<5;n++){ const d=document.createElement('div'); d.className='slot empty';
+        if(host&&!playing){ const a=document.createElement('button'); a.className='btn sm'; a.textContent='+ 봇 추가'; a.onclick=()=>net.send({t:'fill',side,d:1}); d.appendChild(a); }
+        else d.textContent='빈 자리'; el.appendChild(d); }
     }
   }
   // 시작 버튼
@@ -398,7 +406,8 @@ $('#btnLeave').onclick=()=>{ if(room&&room.solo){ room=null; showScreen(online?'
 $('#btnStart').onclick=()=>{
   if(!room) return;
   if(room.solo){ startSolo(soloTeam); return; }
-  if(isHost()){ pendingStart=true; renderRoom(); net.send({t:'start'}); }
+  if(isHost()){ const c=teamCounts(); if(!c.cpu||!c.gpu){ toast('양 팀에 최소 1명(사람 또는 [+] 봇)이 있어야 시작할 수 있습니다'); return; }
+    pendingStart=true; renderRoom(); net.send({t:'start'}); }
   else { const mine=room.members.find(m=>m.id===me.id); net.send({t:'ready',on:!(mine&&mine.ready)}); }
 };
 
@@ -457,6 +466,8 @@ function startBotRoomMatch(){   // 봇전 방: 학생마다 자기 봇이 고른
     const c=seatBot(world, {...e.bot, name: e.owner? e.owner.name : e.bot.name}, side); if(c){ seated++; c.ch=(e.bot.build&&e.bot.build.ch)||null; } }
   for(const side of ['cpu','gpu']) for(const e of plan[side]) if(e.owner&&!e.bot){
     const c=world.chars.find(x=>x.side===side && !x.rules && !x.ownerLabel); if(c){ c.ownerLabel=1; c.name=e.owner.name+' (봇 없음)'; } }
+  const plainFill=s=>plan[s].filter(e=>!e.owner&&!e.bot).length;
+  trimWorld(world, {cpu:plainFill('cpu'), gpu:plainFill('gpu')});
   assignChars(world); world.spec=specView(); $('#mystat').hidden=true;
   beginGame(`${room.title} · 봇전 · 규칙봇 ${seated}개 출전 · 전체 관전`);
   broadcastInit(); countdown();
@@ -471,6 +482,7 @@ function startHostMatch(botsOnly){
   let people=watching?0:1;
   if(!botsOnly) for(const m of room.members){ if(m.id===me.id||m.watch) continue; const tm= sides.gpu.some(x=>x.id===m.id)?'gpu':'cpu'; const c=seatRemote(world,m.id,m.name,m.b||PRESETS.gpu,tm); if(c){ people++; c.ch=(m.b&&m.b.ch)||null; } }
   if(watching && !world.chars[0].remote) world.chars[0].name=TEAM[world.chars[0].side]+' 봇';
+  { const t=assignSides(room.members); trimWorld(world, {cpu:fillOf('cpu', t.cpu.length), gpu:fillOf('gpu', t.gpu.length)}); }
   let seated=0; for(const b of seatedBots()){ const c=seatBot(world,b); if(c){ seated++; c.ch=(b.build&&b.build.ch)||null; } }
   if(botsOnly){ const c=world.chars[0]; c.isPlayer=false; c.rules=myRules.map(r=>({...r})); c.name=myName+' 봇'; }
   assignChars(world);

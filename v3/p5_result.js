@@ -99,12 +99,19 @@ $('#btnConvert').onclick=()=>{ if(!isHost()||!room||room.mode!=='bots') return; 
 $('#btnBotTry').onclick=()=>{ if(room&&!room.solo&&online) { toast('연습 경기는 "혼자 연습"에서 할 수 있습니다'); return; } mySide=soloTeam; startSolo(mySide,{bot:true}); };
 function seatedBots(){   // 봇전 방에서만 규칙봇이 출전 (방 봇 + 공용 봇). 팀을 정한 봇이 먼저
   return room&&room.mode==='bots'? (net.bots||[]).slice().sort((a,b)=>(botTeam(b)?1:0)-(botTeam(a)?1:0)) : []; }
-function planBots(t){   // t = assignSides(...) → {cpu:[{owner, bot}], gpu:[...]} 학생 자리 먼저, 남는 자리에 다른 봇
+function fillOf(side, taken){ const f=(room&&room.fill&&room.fill[side])||0; return Math.max(0, Math.min(f, 5-taken)); }   // 방장이 [+] 로 넣은 봇 수
+function teamCounts(){ const t=assignSides(room.members); return {cpu:t.cpu.length+fillOf('cpu',t.cpu.length), gpu:t.gpu.length+fillOf('gpu',t.gpu.length)}; }
+function planBots(t){   // 봇전: {cpu:[{owner, bot}], ...} 학생마다 자기 봇, 그리고 방장이 [+] 로 넣은 수만큼 아직 안 나간 방 봇(없으면 기본 봇)
   const out={cpu:[],gpu:[]}, used=new Set(), bots=seatedBots();
   for(const side of ['cpu','gpu']) for(const m of t[side]){ const b=bots.find(x=>x.name===m.name)||null; out[side].push({owner:m, bot:b}); if(b) used.add(b.name); }
-  const free={cpu:5-out.cpu.length, gpu:5-out.gpu.length};
-  for(const b of bots){ if(used.has(b.name)) continue; const bt=botTeam(b), s= bt&&free[bt]>0? bt : (free.cpu>=free.gpu? 'cpu':'gpu'); if(free[s]<=0) continue; out[s].push({owner:null, bot:b}); free[s]--; }
+  for(const side of ['cpu','gpu']){ const k=fillOf(side, t[side].length);
+    for(let i=0;i<k;i++){ const b=bots.find(x=>!used.has(x.name) && (botTeam(x)===side || !botTeam(x)))||null; if(b) used.add(b.name); out[side].push({owner:null, bot:b}); } }
   return out;
+}
+function trimWorld(w, keepPlain){   // 사람·규칙봇·'봇 없음' 자리 + 팀마다 keepPlain 개의 기본 봇만 남기고 나머지 자리는 없앤다
+  const kept={cpu:0,gpu:0}, me=w.chars[w.meIdx];
+  w.chars=w.chars.filter(c=> c.isPlayer || c.remote || c.rules || c.ownerLabel || (kept[c.side] < (keepPlain[c.side]||0) && ++kept[c.side]));
+  const i=w.chars.indexOf(me); w.meIdx= i>=0? i : 0;
 }
 function renderBotRoster(){ renderRoom(); }   // 규칙봇 목록이 바뀌면 방 화면(팀 자리)을 다시 그림
 
