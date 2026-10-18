@@ -10,11 +10,13 @@ GPU 아레나 서버 — 로비 · 방 · 중계  (파이썬 표준 라이브러
 
 흐름
   닉네임 입력 → 로비(방 목록 · 접속자 · 채팅) → 방(진영/빌드 선택 · 준비) → 방장이 시작 → 경기 → 방으로 복귀
+  로비의 [무한 아레나 참가] → 방 없이 바로 들어가는 상시 개인전 (이것만은 이 서버가 직접 계산: arena_infinite.py)
 
 게임 규칙 계산은 각 방의 **방장 브라우저**에서만 합니다. 이 서버는 방을 관리하고
 메시지를 중계할 뿐이라, 규칙을 고칠 때는 arena.html 만 바꾸면 됩니다.
 """
 import base64, hashlib, json, os, re, shutil, socket, struct, sys, threading, time, glob, unicodedata
+from arena_infinite import Arena
 # 로그를 파일/파이프로 돌리면 출력이 cp949 가 되어 '↩' 같은 기호에서 print 가 예외 → 그 학생 연결이 끊긴다. 못 쓰는 글자는 ? 로.
 if sys.stdout: sys.stdout.reconfigure(errors="replace")
 
@@ -299,38 +301,36 @@ def ws_recv(sock):
     return payload.decode("utf-8", "replace")
 
 
-def send_to(cid, obj):
-    with lock:
-        u = users.get(cid)
-    if not u:
-        return
-    try:
-        ws_send(u["sock"], json.dumps(obj, ensure_ascii=False))
-    except Exception:
-        pass
-
-
 def send_raw(cid, text):
     with lock:
         u = users.get(cid)
     if not u:
         return
     try:
-        ws_send(u["sock"], text)
+        with u["wl"]:      # 여러 스레드(방 중계·무한 아레나)가 한 소켓에 동시에 쓰면 프레임이 섞인다
+            ws_send(u["sock"], text)
     except Exception:
         pass
 
 
+def send_to(cid, obj):
+    send_raw(cid, json.dumps(obj, ensure_ascii=False))
+
+
+arena = Arena(send_raw)   # 무한 아레나 (서버 권위 · 계산 스레드는 사람이 있을 때만 돈다)
+
+
 # ----------------------------------------------------------------- 상태 전파
 def lobby_view():
+    inf = arena.human_count()
     with lock:
         rs = [{"id": r["id"], "title": r["title"], "locked": bool(r["pw"]),
                "host": users.get(r["host"], {}).get("name", "?"),
                "players": seat_count(r), "max": ROOM_MAX, "state": r["state"], "spect": len(r.get("spect", [])),
                "mode": r.get("mode", "people")}
               for r in rooms.values()]
-        us = [{"id": c, "name": u["name"], "room": u["room"]} for c, u in users.items() if u["name"]]
-    return {"t": "lobby", "rooms": rs, "users": us}
+        us = [{"id": c, "name": u["name"], "room": u["room"], "inf": bool(u.get("inf"))} for c, u in users.items() if u["name"]]
+    return {"t": "lobby", "rooms": rs, "users": us, "inf": inf}
 
 
 def broadcast_lobby():
@@ -425,6 +425,7 @@ def leave_room(cid, quiet=False):
 
 def drop_user(cid):
     """연결 끊김. 방에 있던 사람은 GHOST_SEC 동안 자리를 지켜준다 (같은 닉네임으로 재접속하면 복귀)."""
+    arena.leave(cid)   # 무한 아레나는 자리를 지켜 주지 않는다 (다시 들어오면 새로 태어남)
     with lock:
         u = users.get(cid)
         rr = rooms.get(u["room"]) if u and u["room"] is not None else None
@@ -483,6 +484,23 @@ def handle_msg(cid, raw):
         rid = u["room"]
         r = rooms.get(rid) if rid is not None else None
 
+    # ---- 무한 아레나 (입력이 가장 잦으므로 맨 먼저) ----
+    if t and t.startswith("inf_"):
+        if t == "inf_join":
+            if r:
+                leave_room(cid, quiet=False)
+            u["inf"] = True
+            arena.join(cid, u["name"] or "이름없음", str(obj.get("ch", ""))[:12])
+            broadcast_lobby()
+        elif t == "inf_leave":
+            u["inf"] = False
+            arena.leave(cid)
+            send_to(cid, lobby_view())
+            broadcast_lobby()
+        else:
+            arena.on_msg(cid, obj)
+        return
+
     # ---- 경기 중계 (가장 잦은 메시지라 먼저) ----
     if t == "quit":           # 학생이 경기 중 스스로 나감 → 방장에게 알려 그 자리를 봇으로
         if r and r["state"] == "playing" and r["host"] != cid:
@@ -530,6 +548,9 @@ def handle_msg(cid, raw):
 
     if t == "create_room":
         global next_rid
+        if u.get("inf"):
+            u["inf"] = False
+            arena.leave(cid)
         if r:
             leave_room(cid)
         title = str(obj.get("title", "")).strip()[:20] or f"{u['name']}님의 방"
@@ -549,6 +570,9 @@ def handle_msg(cid, raw):
         return
 
     if t == "join_room":
+        if u.get("inf"):
+            u["inf"] = False
+            arena.leave(cid)
         if r:
             leave_room(cid)
         rid2 = obj.get("rid")
@@ -760,7 +784,7 @@ def handle_ws(sock):
     with lock:
         cid = next_cid
         next_cid += 1
-        users[cid] = {"sock": sock, "name": "", "room": None}
+        users[cid] = {"sock": sock, "name": "", "room": None, "wl": threading.Lock()}
     try:
         while True:
             msg = ws_recv(sock)

@@ -3,7 +3,7 @@
    화면 흐름:  로그인 → 로비 → 방 → 경기 → (결과) → 방
    netMode(엔진 변수): 'solo' 혼자 연습 | 'host' 이 브라우저가 경기 계산 | 'client' 호스트 스냅샷을 받아 그림
    ========================================================================== */
-const SCREENS=['scrLogin','scrLobby','scrRoom','scrGame','scrLeague'];
+const SCREENS=['scrLogin','scrLobby','scrRoom','scrGame','scrLeague','scrInf'];
 let curScreen='scrLogin';
 function showScreen(id){ curScreen=id; for(const s of SCREENS) $('#'+s).hidden=(s!==id); if(id==='scrGame'){ fitCanvas(); view.focus(); } }
 
@@ -96,9 +96,9 @@ function renderCharSelect(locked){
 }
 
 /* ---------- 맵 선택 ---------- */
-function mapPreview(id){ const c=document.createElement('canvas'); c.width=160; c.height=100; const g=c.getContext('2d');
-  g.fillStyle='#eef4fb'; g.fillRect(0,0,160,100); g.fillStyle='rgba(47,127,214,.12)'; g.fillRect(0,0,18,100); g.fillStyle='rgba(240,103,31,.12)'; g.fillRect(142,0,18,100);
-  g.fillStyle='#9fb6cc'; for(const o of MAPS[id].obst) g.fillRect(o.x/6,o.y/6,Math.max(2,o.w/6),Math.max(2,o.h/6)); return c; }
+function mapPreview(id){ const c=document.createElement('canvas'); c.width=320; c.height=200; const g=c.getContext('2d');
+  g.fillStyle='#F4F2EC'; g.fillRect(0,0,320,200); g.fillStyle='#D8E2F0'; g.fillRect(0,0,34,200); g.fillStyle='#F4DCCD'; g.fillRect(286,0,34,200);
+  g.fillStyle='#3D3D3A'; for(const o of MAPS[id].obst) g.fillRect(o.x/3,o.y/3,Math.max(3,o.w/3),Math.max(3,o.h/3)); return c; }
 function renderMaps(){
   const el=$('#mapList'); const canPick=!!(room&&(room.solo||(isHost()&&room.state==='waiting')));
   el.innerHTML='';
@@ -132,9 +132,11 @@ const net={
 function isHost(){ return !!(room&&room.host===me.id); }
 
 function onNetMsg(m){
+  if(m.t&&m.t.startsWith('inf_')){ infOnMsg(m); return; }
   switch(m.t){
     case 'welcome': me.id=m.id; me.name=m.name; $('#whoami').textContent=me.name; $('#whoami2').textContent=me.name; if(!room||room.solo) showScreen('scrLobby'); else toast('다시 연결되었습니다');
       ss.set('arena_auto','1');
+      if(ss.get('arena_inf')==='1'){ setTimeout(infJoin,300); return; }   // 무한 아레나에 있다가 끊겼으면 다시 참가
       setTimeout(()=>{ const rid=+ss.get('arena_room'); if(rid && !room) net.send(ss.get('arena_watch')==='1'? {t:'join_room',rid,spectate:true} : {t:'join_room',rid,b:build}); },700);   // 60초가 지났거나 방장·관전자였으면 다시 입장
       return;
     case 'lobby': lobby=m; renderLobby(); return;
@@ -283,13 +285,14 @@ function renderLobby(){
   for(const r of rooms){
     const full=r.players>=r.max, dis=r.state==='playing'||full;
     const b=document.createElement('button'); b.className='room-card'+(dis?' disabled':'');
-    b.innerHTML=`<div class="room-no">${String(r.id).padStart(3,'0')}</div><div class="room-info"><div class="room-title">${r.locked?'🔒 ':''}${esc(r.title)}</div><div class="room-sub">${r.mode==='bots'?'🤖 봇전':'🎮 학생 대전'} · 방장 ${esc(r.host)}${r.spect?' · 관전 '+r.spect:''}</div></div><div class="room-state ${r.state}">${r.state==='playing'?'게임중':full?'꽉참':'대기중'}<small>${r.players}/${r.max}</small></div>`;
+    b.innerHTML=`<div class="room-no">${String(r.id).padStart(3,'0')}</div><div class="room-info"><div class="room-title">${r.locked?'<svg width="14" height="14" viewBox="0 0 14 14" aria-label="비밀번호" role="img" style="vertical-align:-1px;margin-right:4px"><rect x="2.5" y="6" width="9" height="6.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M4.5 6V4.5a2.5 2.5 0 015 0V6" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>':''}${esc(r.title)}</div><div class="room-sub">${r.mode==='bots'?'<span class="pill dark">봇전</span>':'<span class="pill line">학생 대전</span>'}<span>방장 ${esc(r.host)}</span>${r.spect?'<span>· 관전 '+r.spect+'</span>':''}</div></div><div class="room-state ${r.state==='playing'?'playing':full?'full':r.state}">${r.state==='playing'?'게임중':full?'꽉참':'대기중'}</div><div class="room-fill${r.state==='playing'?' playing':''}"><span class="bar"><i style="width:${Math.round(100*r.players/r.max)}%"></i></span>${r.players}/${r.max}</div>`;
     { const w=document.createElement('span'); w.className='btn sm'; w.textContent='관전'; w.style.marginLeft='6px'; w.onclick=(e)=>{ e.stopPropagation(); net.send({t:'join_room',rid:r.id,spectate:true}); }; b.appendChild(w); }
-    b.onclick=()=>{ if(dis) return; if(r.locked) modal('🔒 '+r.title,[['pw','비밀번호','password']],'입장',v=>net.send({t:'join_room',rid:r.id,pw:v.pw,b:build})); else net.send({t:'join_room',rid:r.id,b:build}); };
+    b.onclick=()=>{ if(dis) return; if(r.locked) modal(r.title+' (비밀번호)',[['pw','비밀번호','password']],'입장',v=>net.send({t:'join_room',rid:r.id,pw:v.pw,b:build})); else net.send({t:'join_room',rid:r.id,b:build}); };
     g.appendChild(b);
   }
   $('#userN').textContent='('+lobby.users.length+')';
-  $('#userList').innerHTML=lobby.users.map(u=>`<li class="${u.id===me.id?'me':''}"><span>${esc(u.name)}</span><small>${u.room?u.room+'번 방':'로비'}</small></li>`).join('');
+  $('#userList').innerHTML=lobby.users.map(u=>`<li class="${u.id===me.id?'me':''}"><span>${esc(u.name)}</span><small>${u.room?u.room+'번 방':u.inf?'⚔ 아레나':'로비'}</small></li>`).join('');
+  $('#infN').textContent=lobby.inf||0;
 }
 $('#waitingOnly').onchange=renderLobby;
 $('#btnCreate').onclick=()=>modal('방 만들기',[['mode','방 기능',[['people','학생 대전 — 학생이 직접 조종 (빈자리는 기본 봇)'],['bots','봇전 — 학생들이 낸 전략 봇끼리 대결 (사람은 관전)']]],
