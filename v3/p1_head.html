@@ -1,0 +1,523 @@
+<title>GPU 아레나</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;500;700;900&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+:root{
+  --bg1:#6fd0ff; --bg2:#2f7fe0; --panel:#ffffff; --panel2:#f1f6fc; --edge:#1d4f9c; --edge-soft:#c9d8ee;
+  --ink:#1e2a3a; --muted:#6f7d91; --faint:#9aa7b8;
+  --accent:#ffcf2e; --accent-ink:#5a3b00; --primary:#ff7a2f; --ok:#2fbf71; --danger:#e5484d;
+  --cpu:#1f6fe0; --cpu-bg:#e3efff; --cpu-ink:#0f4aa8; --gpu:#f0671f; --gpu-bg:#ffeadb; --gpu-ink:#9a3d08;
+  --sans:"Noto Sans KR",-apple-system,"Segoe UI","Malgun Gothic",sans-serif;
+  --disp:"Jua","Noto Sans KR",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+*{box-sizing:border-box}[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;
+  background:radial-gradient(circle at 18% 8%,#a9e6ff 0,transparent 42%),linear-gradient(180deg,var(--bg1),var(--bg2));
+  background-attachment:fixed;overflow:hidden}
+b{font-weight:700}
+button,input,select,textarea{font:inherit;color:var(--ink)}
+button{cursor:pointer}button:disabled{cursor:default}
+input[type=text],input[type=password],textarea{padding:8px 10px;border:2px solid var(--edge-soft);border-radius:8px;outline:none;width:100%;background:#fff}
+input[type=text]:focus,input[type=password]:focus,textarea:focus{border-color:var(--bg2)}
+input[type=range]{accent-color:var(--edge);width:100%}
+kbd,.kbd{display:inline-block;padding:0 6px;margin:0 1px;border:1px solid #b8c4d6;border-bottom-width:2px;border-radius:4px;background:#f4f7fb;font-size:11px;font-family:var(--mono)}
+.muted{color:var(--muted)}.spacer{flex:1}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* ---------- 공통 ---------- */
+.screen{height:100%;overflow:auto;padding:12px 16px 24px}
+.wrap{max-width:1200px;margin:0 auto}
+.logo{font-family:var(--disp);font-weight:400;letter-spacing:2px;font-size:58px;margin:0;line-height:1;text-shadow:0 4px 0 var(--edge),0 7px 16px rgba(0,0,0,.25)}
+.logo .a{color:var(--accent)}.logo .b{color:#fff}
+.logo.small{font-size:24px;text-shadow:0 2px 0 var(--edge)}
+.topbar{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.whoami{background:rgba(255,255,255,.92);padding:5px 12px;border-radius:999px;font-weight:700;font-size:13px}
+.panel{background:var(--panel);border:3px solid var(--edge);border-radius:14px;padding:12px;box-shadow:0 4px 0 rgba(13,45,100,.35)}
+.panel-title{font-family:var(--disp);font-size:16px;margin-bottom:8px;color:var(--edge);display:flex;align-items:center;gap:10px}
+.panel-title small{color:var(--muted);font-family:var(--sans);font-weight:500;font-size:12px}
+.panel-title .spacer{flex:1}
+.btn{border:0;border-radius:10px;padding:8px 16px;background:#e8eef7;font-weight:700;box-shadow:0 3px 0 #c5d1e3;white-space:nowrap}
+.btn:active:not(:disabled){transform:translateY(2px);box-shadow:0 1px 0 #c5d1e3}
+.btn.primary{background:var(--accent);color:var(--accent-ink);box-shadow:0 3px 0 #c99a00}
+.btn.primary:active:not(:disabled){box-shadow:0 1px 0 #c99a00}
+.btn.start{background:var(--ok);color:#fff;font-family:var(--disp);font-size:22px;padding:12px;width:100%;box-shadow:0 4px 0 #1f8a50;letter-spacing:1px}
+.btn.start.on{background:var(--primary);box-shadow:0 4px 0 #b84f12}
+.btn.sm{padding:5px 10px;font-size:12px;box-shadow:0 2px 0 #c5d1e3}
+.btn.danger{background:#ffe3e4;color:#9c1e22;box-shadow:0 3px 0 #e2b4b6}
+.btn:disabled{opacity:.45}
+.error-text{color:var(--danger);font-weight:700;font-size:13px;margin-top:8px}
+.toast{position:fixed;left:50%;top:16px;transform:translateX(-50%);background:rgba(30,42,58,.92);color:#fff;padding:7px 16px;border-radius:20px;font-size:13px;font-weight:700;pointer-events:none;opacity:0;transition:opacity .2s;z-index:50}
+.toast.show{opacity:1}
+.pill{display:inline-block;font-size:12px;border-radius:999px;padding:2px 10px;background:var(--panel2);border:1px solid var(--edge-soft);font-weight:700}
+.pill.cpu{background:var(--cpu-bg);border-color:#9ec3ff;color:var(--cpu-ink)}.pill.gpu{background:var(--gpu-bg);border-color:#ffc39f;color:var(--gpu-ink)}
+
+/* ---------- 로그인 ---------- */
+.login{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;text-align:center}
+.login-box{width:min(420px,100%);display:flex;flex-direction:column;gap:10px}
+.login-box .btn{width:100%;padding:11px}
+.login .tag{color:#fff;font-weight:700;text-shadow:0 2px 0 rgba(0,0,0,.25);font-size:15px;margin-top:-10px}
+.login .sub{color:#eaf6ff;font-size:12.5px}
+
+/* ---------- 로비 ---------- */
+.lobby{display:grid;grid-template-columns:1fr 300px;gap:14px}
+.lobby-side{display:flex;flex-direction:column;gap:14px}
+.room-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.empty{grid-column:1/-1;color:var(--muted);text-align:center;padding:36px 10px;font-weight:500}
+.room-card{display:flex;gap:10px;align-items:center;text-align:left;border:2px solid var(--edge-soft);border-radius:12px;padding:10px;background:#fff}
+.room-card:hover:not(.disabled){border-color:var(--bg2);background:#f5faff}
+.room-card.disabled{opacity:.55;cursor:default}
+.room-no{font-family:var(--mono);font-weight:700;color:var(--edge);background:var(--panel2);border-radius:8px;padding:6px 8px}
+.room-info{flex:1;min-width:0}.room-title{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.room-sub{font-size:12px;color:var(--muted)}
+.room-state{font-size:12px;font-weight:700;color:var(--ok);text-align:center}
+.room-state.playing{color:var(--primary)}.room-state small{display:block;color:var(--muted);font-weight:500}
+.users ul{list-style:none;margin:0;padding:0;max-height:220px;overflow:auto}
+.users li{display:flex;justify-content:space-between;padding:4px 6px;border-radius:6px;font-size:13px}
+.users li.me{background:var(--panel2);font-weight:700}.users li small{color:var(--muted)}
+.chat-list{height:200px;overflow:auto;background:var(--panel2);border-radius:8px;padding:8px;font-size:13px;display:flex;flex-direction:column;gap:3px}
+.chat.compact .chat-list{height:120px}
+.chat-line.sys{color:var(--muted);font-style:italic}.chat-line b{color:var(--edge)}
+.chat-form{display:flex;gap:6px;margin-top:6px}.chat-form input{flex:1}
+.check{display:flex;align-items:center;gap:4px;font-size:13px;font-weight:500;color:var(--muted)}
+.check input{width:auto}
+
+/* ---------- 모달 ---------- */
+.modal-backdrop{position:fixed;inset:0;background:rgba(10,30,60,.45);display:grid;place-items:center;z-index:40;padding:16px}
+.modal{width:min(420px,100%)}
+.form{display:flex;flex-direction:column;gap:10px}.form label{display:flex;flex-direction:column;gap:4px;font-weight:700;font-size:13px}
+.form label small{font-weight:500;color:var(--muted)}
+.form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
+
+/* ---------- 방 ---------- */
+.room-header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.room-header .room-title{font-family:var(--disp);font-size:24px;color:#fff;text-shadow:0 2px 0 var(--edge)}
+.room-body{display:grid;grid-template-columns:1fr 310px;gap:14px;align-items:start}
+.room-left,.room-right{display:flex;flex-direction:column;gap:14px;min-width:0}
+.teams{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.team{border-radius:12px;padding:8px;border:2px solid}
+.team.cpu{background:var(--cpu-bg);border-color:#9ec3ff}.team.gpu{background:var(--gpu-bg);border-color:#ffc39f}
+.team h4{margin:0 0 6px;font-family:var(--disp);font-weight:400;font-size:15px;display:flex;align-items:center;gap:6px}
+.team.cpu h4{color:var(--cpu-ink)}.team.gpu h4{color:var(--gpu-ink)}
+.team h4 small{font-family:var(--sans);font-size:11px;color:var(--muted);font-weight:500}
+.slot{display:flex;align-items:center;gap:8px;background:#fff;border-radius:9px;padding:5px 8px;margin-bottom:5px;border:2px solid transparent;min-height:38px}
+.slot.me{border-color:var(--edge)}
+.slot.empty{background:rgba(255,255,255,.45);color:var(--faint);font-size:12.5px;border-style:dashed;border-color:rgba(0,0,0,.12)}
+.slot .nm{flex:1;min-width:0;font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.slot .nm small{display:block;font-weight:500;color:var(--muted);font-size:11px}
+.badge{font-size:10.5px;font-weight:900;padding:1px 7px;border-radius:999px;background:#e8eef7;color:var(--muted);letter-spacing:.5px}
+.badge.host{background:var(--accent);color:var(--accent-ink)}.badge.ready{background:var(--ok);color:#fff}.badge.bot{background:#d9dee8;color:#4a5568}
+.builds{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.build-card{border:2px solid var(--edge-soft);border-radius:12px;padding:10px 12px;background:#fff;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:4px}
+.build-card:hover:not(:disabled){border-color:var(--bg2)}
+.build-card.selected.cpu{border-color:var(--cpu);background:var(--cpu-bg)}.build-card.selected.gpu{border-color:var(--gpu);background:var(--gpu-bg)}
+.build-card:disabled:not(.selected){opacity:.5;cursor:default}
+.build-card .head{display:flex;align-items:center;gap:8px}
+.build-card .head img{width:36px;height:40px;image-rendering:pixelated}
+.build-card .head b{font-family:var(--disp);font-weight:400;font-size:17px}
+.build-card .head small{color:var(--muted);font-size:11px}
+.build-card p{margin:2px 0 4px;font-size:12px;color:var(--muted);line-height:1.45}
+.stat-bar{display:grid;grid-template-columns:74px 1fr 70px;gap:6px;align-items:center;font-size:11.5px}
+.stat-bar .bar{height:9px;border-radius:5px;background:#e3e9f1;overflow:hidden}
+.stat-bar .bar i{display:block;height:100%;border-radius:5px}
+.cpu .stat-bar .bar i{background:var(--cpu)}.gpu .stat-bar .bar i{background:var(--gpu)}
+.stat-bar small{color:var(--muted);text-align:right;font-family:var(--mono);font-size:10.5px}
+details.adv{margin-top:8px;border-top:1px dashed var(--edge-soft);padding-top:8px}
+details.adv summary{cursor:pointer;font-weight:700;font-size:12.5px;color:var(--edge)}
+.build{display:grid;grid-template-columns:118px 1fr 190px;gap:6px 10px;align-items:center;font-size:12.5px;margin-top:8px}
+.build .v{font-family:var(--mono);font-size:11.5px;color:var(--edge)}
+.budget{height:10px;border-radius:5px;background:#e3e9f1;overflow:hidden;position:relative;margin:8px 0 2px}
+.budget i{position:absolute;inset:0 auto 0 0;background:#8250df;transition:width .2s}
+.budget.over i{background:var(--danger)}
+.start-box{display:flex;flex-direction:column;gap:8px}
+.hint{font-size:12px;color:var(--muted);text-align:center}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.controls div{font-size:12.5px;margin:3px 0}
+.rule{display:grid;grid-template-columns:auto auto 60px auto auto 20px;gap:4px;align-items:center;margin-bottom:4px;font-size:12px}
+.rule select,.rule input{border:1px solid var(--edge-soft);border-radius:5px;padding:2px 4px;background:#fff;font-size:12px;width:auto}
+.rule input{width:54px;font-family:var(--mono)}
+.rule .x{border:none;background:transparent;color:var(--faint);padding:0;font-weight:900}
+.rule .n{font-family:var(--mono);color:var(--faint);font-size:11px}
+.rule.always select:first-of-type{opacity:.55}
+textarea#stratText{min-height:96px;resize:vertical;font-size:13px;line-height:1.55}
+.note{background:#fff8d6;border:2px solid #f0d36a;border-radius:10px;padding:9px 12px;font-size:12.5px;color:#4a3700}
+.note b{color:#7d4e00}
+
+/* ---------- 캐릭터 ---------- */
+.portrait{border-radius:50%;overflow:hidden;flex:none;display:inline-flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 3px rgba(255,255,255,.85),0 2px 6px rgba(13,45,100,.25);vertical-align:middle}
+.portrait img{display:block;width:78%;height:78%;object-fit:contain;image-rendering:pixelated}
+.portrait.dice{background:conic-gradient(#ff7eb3,#ffd23f,#7fe0c4,#3b7ddd,#c3a6ff,#ff7eb3);color:#fff;font-weight:900;text-shadow:0 2px 0 rgba(0,0,0,.25);font-size:22px}
+.char-select{display:grid;grid-template-columns:1fr 240px;gap:12px}
+.char-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px;align-content:start}
+.char-card{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px 6px;border:3px solid #d7e1ee;border-radius:14px;background:linear-gradient(180deg,#fff,#eef5ff);transition:transform .12s,border-color .12s}
+.char-card:hover:not(:disabled){transform:translateY(-2px);border-color:#9cc3ff}
+.char-card.selected{border-color:var(--primary);background:linear-gradient(180deg,#fffaf2,#ffe9d2)}
+.char-card:disabled:not(.selected){opacity:.5}
+.char-card b{font-size:13px}.char-card small{color:var(--muted);font-size:10.5px;line-height:1.2;text-align:center}
+.char-card .side{font-size:9.5px;font-weight:900;letter-spacing:.5px;padding:0 6px;border-radius:999px;margin-top:2px}
+.char-card .side.cpu{background:var(--cpu-bg);color:var(--cpu-ink)}.char-card .side.gpu{background:var(--gpu-bg);color:var(--gpu-ink)}
+.char-detail{background:#f6f9fe;border-radius:12px;padding:10px 12px;font-size:13px}
+.char-detail .head{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.char-detail .head b{font-family:var(--disp);font-weight:400;font-size:20px}
+.char-detail .head span{font-weight:800;font-size:12px}
+.char-detail p{margin:4px 0 10px;color:#4a5869;font-size:12.5px;line-height:1.45}
+.char-detail .stat-bar{grid-template-columns:66px 1fr 72px;margin-bottom:6px;font-weight:700}
+.char-detail .stat-bar .bar{height:10px;background:#dde6f2;border-radius:999px}
+.char-detail .stat-bar .bar i{border-radius:999px;background:var(--primary)}
+.char-detail.cpu .stat-bar .bar i{background:var(--cpu)}.char-detail.gpu .stat-bar .bar i{background:var(--gpu)}
+.slot .portrait{width:30px;height:30px}
+.pl{grid-template-columns:auto 1fr auto}.pl .portrait{width:22px;height:22px;grid-row:1/3}.pl .hpb{grid-column:2/-1}
+@media (max-width:860px){.char-select{grid-template-columns:1fr}}
+
+/* ---------- 참가/관전 전환 ---------- */
+.seg{display:flex;background:var(--panel2);border:2px solid var(--edge-soft);border-radius:10px;padding:3px;gap:3px}
+.seg button{flex:1;border:0;border-radius:7px;padding:7px 0;background:transparent;font-weight:700;color:var(--muted)}
+.seg button.on{background:#fff;color:var(--edge);box-shadow:0 1px 3px rgba(13,45,100,.25)}
+.seg button:disabled{opacity:.5}
+.watchers{margin-top:8px;font-size:12.5px;color:var(--muted)}
+.watchers b{color:var(--edge)}
+/* ---------- 리그 ---------- */
+table.hm{border-collapse:separate;border-spacing:2px;font-size:11.5px}
+table.hm th{font-weight:700;color:var(--muted);padding:2px 4px;white-space:nowrap;max-width:80px;overflow:hidden;text-overflow:ellipsis}
+table.hm th.col{writing-mode:vertical-rl;transform:rotate(180deg);height:70px;text-align:left}
+table.hm td{width:34px;height:28px;text-align:center;border-radius:5px;font-family:var(--mono);font-weight:700;color:#fff}
+table.hm td.self{background:#e3e9f1;color:transparent}
+table.lg{width:100%;border-collapse:collapse;font-size:14px}
+table.lg th{font-size:11.5px;color:var(--muted);font-weight:700;text-align:right;padding:4px 8px;border-bottom:2px solid var(--edge-soft)}
+table.lg td{padding:6px 8px;border-bottom:1px solid #eef2f7;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+table.lg th:nth-child(-n+2),table.lg td:nth-child(-n+2){text-align:left;font-family:var(--sans)}
+table.lg td.nm{font-weight:700;font-size:15px}
+table.lg td.nm .portrait{margin-right:6px}
+table.lg tr.top td{background:#fff8d6}
+table.lg td.rank{font-family:var(--disp);font-size:20px;color:var(--edge);width:40px}
+table.lg td.pts{font-weight:700;font-size:16px;color:var(--edge)}
+.matches{display:flex;flex-direction:column;gap:4px;max-height:420px;overflow:auto;font-size:12.5px}
+.matches div{display:flex;justify-content:space-between;gap:8px;background:var(--panel2);border-radius:6px;padding:4px 8px}
+.matches .sc{font-family:var(--mono);color:var(--muted)}
+.audit{background:#fff3f3;border:1px solid #f1b8ba;border-radius:8px;padding:6px 9px;margin-bottom:5px;color:#7a1f23}
+.audit b{display:block;font-size:12px}
+
+/* ---------- 맵 ---------- */
+.map-list{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.map-card{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px;border:3px solid #d7e1ee;border-radius:12px;background:#fff;text-align:center}
+.map-card:hover:not(:disabled){border-color:#9cc3ff}
+.map-card.selected{border-color:var(--primary);background:#fff7ec}
+.map-card:disabled:not(.selected){opacity:.5}
+.map-card canvas{width:100%;max-width:160px;border-radius:6px;image-rendering:auto;border:1px solid var(--edge-soft)}
+.map-card b{font-size:13px}.map-card small{font-size:11px;color:var(--muted);line-height:1.3}
+/* ---------- 경기 ---------- */
+#scrGame{padding:10px 12px}
+.game{display:grid;grid-template-columns:1fr 290px;gap:12px;height:100%}
+.board-wrap{position:relative;min-width:0;min-height:0;background:var(--panel);border:3px solid var(--edge);border-radius:14px;box-shadow:0 4px 0 rgba(13,45,100,.35);overflow:hidden}
+#stage{position:absolute;inset:0;display:grid;place-items:center;background:#dbe9f7}
+#view{background:#f0f6fc;display:block;cursor:crosshair;outline:none}
+.hud{display:flex;flex-direction:column;gap:10px;min-height:0;overflow:auto}
+.hud .panel{padding:10px 12px}
+.timer{display:flex;align-items:center;justify-content:space-between}
+.timer b{font-family:var(--mono);font-size:26px;color:var(--edge);flex:none;margin-left:8px}
+.timer .lbl{font-size:12px;color:var(--muted)}
+.hud .box{display:inline-block;font-family:var(--mono);font-size:11.5px;background:var(--panel2);border-radius:6px;padding:2px 7px;margin:2px 2px 0 0;font-variant-numeric:tabular-nums}
+.hud .box.cpu{background:var(--cpu-bg);color:var(--cpu-ink)}.hud .box.gpu{background:var(--gpu-bg);color:var(--gpu-ink)}
+.tp{border-radius:10px;padding:6px 8px;border:2px solid}
+.tp.cpu{background:var(--cpu-bg);border-color:#9ec3ff}.tp.gpu{background:var(--gpu-bg);border-color:#ffc39f}
+.tp h4{margin:0 0 4px;font-family:var(--disp);font-weight:400;font-size:14px;display:flex;align-items:center;gap:6px}
+.tp.cpu h4{color:var(--cpu-ink)}.tp.gpu h4{color:var(--gpu-ink)}
+.tp h4 .mono{margin-left:auto;font-size:13px}
+.pl{display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:center;font-size:12px;padding:2px 4px;border-radius:6px;background:rgba(255,255,255,.7);margin-bottom:3px}
+.pl.me{outline:2px solid var(--edge)}.pl.dead{opacity:.55}.pl.out{opacity:.35;text-decoration:line-through}
+.pl .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700}
+.pl .lv{display:flex;gap:2px}.pl .lv i{width:7px;height:7px;border-radius:50%;background:#d6dde5}
+.tp.cpu .pl .lv i.on{background:var(--cpu)}.tp.gpu .pl .lv i.on{background:var(--gpu)}
+.pl .hpb{grid-column:1/-1;height:4px;border-radius:2px;background:#dfe6ee;overflow:hidden}
+.pl .hpb i{display:block;height:100%}.tp.cpu .pl .hpb i{background:var(--cpu)}.tp.gpu .pl .hpb i{background:var(--gpu)}
+/* 인게임 오버레이 (캔버스 위) */
+#gameUI{position:absolute;inset:0;pointer-events:none}
+.scorebar{position:absolute;top:10px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.92);border:2px solid var(--edge);border-radius:999px;padding:4px 14px;box-shadow:0 3px 0 rgba(13,45,100,.3)}
+.scorebar .s{font-family:var(--mono);font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;min-width:30px;text-align:center}
+.scorebar .s.cpu{color:var(--cpu-ink)}.scorebar .s.gpu{color:var(--gpu-ink)}
+.scorebar .k{display:block;font-size:10px;color:var(--muted);text-align:center;margin-top:-3px}
+.scorebar .clock{font-family:var(--mono);font-size:16px;font-weight:700;padding:0 8px;border-left:1px solid var(--edge-soft);border-right:1px solid var(--edge-soft)}
+.scorebar .clock.low{color:var(--danger)}
+.bar2{width:120px;height:8px;border-radius:4px;background:#e6ebf1;overflow:hidden;display:flex}
+.bar2 i{display:block;height:100%}.bar2 .c{background:var(--cpu)}.bar2 .g{background:var(--gpu)}
+.feed{position:absolute;top:58px;right:14px;display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+.feed div{background:rgba(255,255,255,.93);border:1px solid var(--edge-soft);border-radius:6px;padding:3px 10px;font-size:12.5px;animation:fadein .2s}
+.feed b.cpu{color:var(--cpu-ink)}.feed b.gpu{color:var(--gpu-ink)}
+@keyframes fadein{from{opacity:0;transform:translateX(8px)}to{opacity:1}}
+.mystat{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:14px;background:rgba(255,255,255,.94);border:2px solid var(--edge);border-radius:12px;padding:6px 16px;box-shadow:0 3px 0 rgba(13,45,100,.3)}
+.mystat .lbl{font-size:11px;color:var(--muted);margin-right:4px}
+.hearts{display:inline-flex;gap:3px;vertical-align:-1px;margin-left:4px}
+.hearts i{width:10px;height:9px;border-radius:2px;background:#d6dde5}
+.hearts i.on.cpu{background:var(--cpu)}.hearts i.on.gpu{background:var(--gpu)}
+#msLives i{width:9px;height:9px;border-radius:50%}
+.gauge{display:inline-block;vertical-align:-1px;width:108px;height:8px;border-radius:4px;background:#e6ebf1;overflow:hidden}
+.gauge i{display:block;height:100%;background:#6b7a90;transition:width .1s}.gauge i.warm{background:var(--ok)}
+.mystat .num{font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums}
+.deadOv{position:absolute;inset:0;display:grid;place-items:center;background:rgba(229,72,77,.10)}
+.deadOv div{background:rgba(255,255,255,.96);border:3px solid var(--edge);border-radius:12px;padding:14px 28px;text-align:center}
+.deadOv .big{font-family:var(--mono);font-size:34px;font-weight:700;color:var(--danger);line-height:1}
+.countdown{position:absolute;inset:0;display:grid;place-items:center;background:rgba(219,233,247,.55)}
+.countdown span{font-family:var(--disp);font-size:120px;color:#fff;text-shadow:0 6px 0 var(--edge),0 10px 24px rgba(0,0,0,.3)}
+.hitv{position:absolute;inset:0;box-shadow:inset 0 0 90px rgba(229,72,77,.55);opacity:0;transition:opacity .25s}
+.hitv.on{opacity:1;transition:opacity .04s}
+/* 결과 */
+.overlay{position:absolute;inset:0;background:rgba(219,233,247,.9);display:grid;place-items:center;overflow:auto;padding:20px}
+.sheet{width:100%;max-width:880px}
+.sheet .win{font-family:var(--disp);font-size:30px;line-height:1.2;margin:0 0 6px}
+.sheet .win.cpu{color:var(--cpu-ink)}.sheet .win.gpu{color:var(--gpu-ink)}
+.sheet .lead{color:var(--muted);font-size:13px;margin-bottom:10px}
+table.st{width:100%;border-collapse:collapse;font-size:12.5px}
+table.st th,table.st td{padding:4px 8px;border-top:1px solid var(--edge-soft);text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+table.st th:first-child,table.st td:first-child{text-align:left;font-family:var(--sans)}
+table.st th{color:var(--muted);font-weight:500;font-size:11.5px;border-top:none}
+table.st td.cpu{color:var(--cpu-ink);font-weight:700}table.st td.gpu{color:var(--gpu-ink);font-weight:700}
+table.st td.d{text-align:left;font-family:var(--sans);color:var(--muted);font-size:11.5px}
+@media (prefers-reduced-motion:reduce){.budget i,.toast,.feed div{transition:none;animation:none}}
+@media (max-width:900px){.lobby,.room-body,.game{grid-template-columns:1fr}.game{height:auto}.board-wrap{aspect-ratio:16/10}.teams,.builds{grid-template-columns:1fr}}
+</style>
+
+<div class="toast" id="toast"></div>
+
+<!-- ============ 로그인 ============ -->
+<div class="screen" id="scrLogin">
+  <div class="login">
+    <h1 class="logo"><span class="a">GPU</span> <span class="b">ARENA</span></h1>
+    <div class="tag">내 하드웨어를 고르고 눈싸움에 들어가기</div>
+    <form class="panel login-box" id="loginForm">
+      <div class="panel-title">닉네임을 입력하세요</div>
+      <input type="text" id="pname" maxlength="12" placeholder="닉네임 (1~12자)" autocomplete="off">
+      <button class="btn primary" id="btnLogin" type="submit">접속하기</button>
+      <button class="btn" id="btnSoloLogin" type="button">혼자 연습 (서버 없이)</button>
+      <button class="btn" id="btnLeagueLogin" type="button">봇 리그 순위표</button>
+      <div class="error-text" id="loginErr" hidden></div>
+    </form>
+    <div class="sub">규칙은 양쪽 같습니다. 다른 건 <b>내가 어떤 칩으로 이 게임을 돌리는지</b>뿐입니다.</div>
+  </div>
+</div>
+
+<!-- ============ 로비 ============ -->
+<div class="screen" id="scrLobby" hidden>
+  <div class="wrap">
+    <div class="topbar">
+      <h1 class="logo small"><span class="a">GPU</span> <span class="b">ARENA</span></h1>
+      <span class="spacer"></span>
+      <span class="whoami" id="whoami"></span>
+      <button class="btn sm" id="btnLobbyLeague">봇 리그</button>
+      <button class="btn sm" id="btnLobbySolo">혼자 연습</button>
+    </div>
+    <div class="lobby">
+      <div class="panel">
+        <div class="panel-title"><span>방 목록</span><span class="spacer"></span>
+          <label class="check"><input type="checkbox" id="waitingOnly"> 대기방만</label>
+          <button class="btn primary" id="btnCreate">방 만들기</button></div>
+        <div class="room-grid" id="roomGrid"></div>
+      </div>
+      <div class="lobby-side">
+        <div class="panel users"><div class="panel-title">접속자 <small id="userN"></small></div><ul id="userList"></ul></div>
+        <div class="panel chat"><div class="panel-title">로비 채팅</div>
+          <div class="chat-list" id="chatLobby"></div>
+          <form class="chat-form" id="chatFormLobby"><input type="text" maxlength="200" placeholder="메시지"><button class="btn sm" type="submit">보내기</button></form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 방 ============ -->
+<div class="screen" id="scrRoom" hidden>
+  <div class="wrap">
+    <div class="room-header">
+      <h1 class="logo small"><span class="a">GPU</span> <span class="b">ARENA</span></h1>
+      <span class="room-title" id="roomTitle"></span>
+      <span class="spacer"></span>
+      <span class="whoami" id="whoami2"></span>
+      <button class="btn sm danger" id="btnLeave">나가기</button>
+    </div>
+    <div class="room-body">
+      <div class="room-left">
+        <div class="panel">
+          <div class="panel-title"><span>팀 편성</span><small id="teamHint">오른쪽 위에서 A팀·B팀을 고르세요 · 팀 안에 CPU형·GPU형을 어떻게 섞을지가 전략 · 빈 자리는 봇</small></div>
+          <div class="teams">
+            <div class="team cpu"><h4>A팀 <small>파랑</small></h4><div id="teamCpu"></div></div>
+            <div class="team gpu"><h4>B팀 <small>주황</small></h4><div id="teamGpu"></div></div>
+          </div>
+          <div class="watchers" id="watchers" hidden></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title"><span>캐릭터 선택</span><small id="buildHint">캐릭터 = 하드웨어 빌드. 고르면 진영이 정해집니다</small></div>
+          <div class="char-select">
+            <div class="char-grid" id="charGrid"></div>
+            <div class="char-detail" id="charDetail"></div>
+          </div>
+          <details class="adv" id="advBuild">
+            <summary>세부 빌드 조정 (트랜지스터 예산 90)</summary>
+            <div class="build">
+              <span>렌더 (해상도·시야)</span><input type="range" id="bRender" min="1" max="5" value="4"><span class="v" id="bRenderV"></span>
+              <span>코어 폭 (동시 발사)</span><input type="range" id="bLane" min="0" max="4" value="4"><span class="v" id="bLaneV"></span>
+              <span>클럭 (반응·이동)</span><input type="range" id="bClock" min="1" max="5" value="2"><span class="v" id="bClockV"></span>
+              <span>메모리 (탄약)</span><input type="range" id="bMem" min="1" max="5" value="3"><span class="v" id="bMemV"></span>
+            </div>
+            <div class="budget" id="budgetBar"><i></i></div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted)"><span>사용 예산</span><span id="budgetV"></span></div>
+          </details>
+        </div>
+        <div class="panel">
+          <div class="panel-title"><span>맵 선택</span><small id="mapHint">방장만 바꿀 수 있습니다</small></div>
+          <div class="map-list" id="mapList"></div>
+        </div>
+        <div class="panel" id="botPanel">
+          <div class="panel-title"><span>전략 봇</span><small>내가 조종하는 대신, 말로 쓴 전략대로 움직이는 봇을 내보냅니다</small></div>
+          <div class="row" style="align-items:stretch">
+            <div style="flex:1.2;min-width:260px">
+              <textarea id="stratText" placeholder="한국어로 전략을 쓰세요. 선생님 화면의 에이전트가 규칙표로 바꿔 줍니다.&#10;예) 탄약이 5발 아래면 먼저 주우러 간다.&#10;체력이 1이면 뒤로 물러난다.&#10;부채꼴에 적이 2명 이상 들어오면 던진다.&#10;그 외에는 적과 300 정도 거리를 유지한다."></textarea>
+              <div class="row" style="margin-top:8px">
+                <button class="btn primary sm" id="btnSubmitStrat">전략 제출</button>
+                <button class="btn sm" id="btnRuleEdit">규칙 직접 만들기</button>
+                <button class="btn sm" id="btnMyBot">내 봇 확인</button>
+                <span id="stratMsg" class="muted" style="font-size:12px"></span>
+              </div>
+              <div id="myBotBox" class="note" style="margin-top:8px" hidden></div>
+            </div>
+            <div style="flex:1;min-width:250px;border-left:2px dashed var(--edge-soft);padding-left:12px">
+              <div class="muted" style="font-size:12px;margin-bottom:6px">내 규칙표 <span id="ruleSrc"></span></div>
+              <div id="ruleList"></div>
+              <div class="row" style="margin-top:8px">
+                <button class="btn sm" id="btnRuleAdd">+ 규칙</button>
+                <button class="btn primary sm" id="btnRuleSubmit">규칙표 제출</button>
+                <button class="btn sm" id="btnBotTry">이 봇으로 연습 경기</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="room-right">
+        <div class="panel start-box">
+          <div class="seg" id="watchSeg"><button class="on" data-w="cpu">A팀</button><button data-w="gpu">B팀</button><button data-w="watch">관전</button></div>
+          <button class="btn sm" id="btnConvert" hidden title="제출된 전략을 선생님 PC의 에이전트가 봇으로 바꿉니다">봇 만들기</button>
+          <div class="muted" id="convertMsg" style="font-size:12px;margin:2px 0 6px" hidden></div>
+          <button class="btn start" id="btnStart">게임 시작</button>
+          <div class="hint" id="startHint"></div>
+          <div id="soloTools" hidden>
+            <div class="build" style="grid-template-columns:1fr 1fr 56px;margin-top:4px">
+              <span>아군 봇 CPU / GPU</span><input type="range" id="bAlly" min="0" max="4" value="2"><span class="v" id="bAllyV"></span>
+            </div>
+            <div class="muted" style="font-size:11.5px">좁은 통로는 CPU형이, 열린 곳은 GPU형이 강합니다. 실제 컴퓨터가 둘을 함께 두는 이유입니다.</div>
+          </div>
+        </div>
+        <div class="panel controls">
+          <div class="panel-title">조작</div>
+          <div><kbd>W A S D</kbd> / <kbd>←↑↓→</kbd> 이동</div>
+          <div><kbd>마우스</kbd> 조준 · <kbd>클릭</kbd>/<kbd>Space</kbd> 던지기</div>
+          <div><kbd>Shift</kbd> 질주 (탄약 소모) · <kbd>P</kbd> 일시정지</div>
+          <div class="muted" style="font-size:11.5px">한글 입력 상태여도 그대로 작동합니다.</div>
+        </div>
+        <div class="panel note"><b>승리 조건</b> 상대 팀 전원 탈락 시 즉시 승리. 한 사람당 목숨 3, 체력 6. 1~2발형은 한 발 피해 3(두 방), 4발 이상은 한 발 피해 2(세 방). 90초가 지나면 남은 목숨이 많은 쪽이 이깁니다.</div>
+        <div class="panel chat compact" id="roomChatPanel">
+          <div class="panel-title">채팅</div>
+          <div class="chat-list" id="chatRoom"></div>
+          <form class="chat-form" id="chatFormRoom"><input type="text" maxlength="200" placeholder="메시지"><button class="btn sm" type="submit">보내기</button></form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 경기 ============ -->
+<div class="screen" id="scrGame" hidden>
+  <div class="game">
+    <div class="board-wrap">
+      <div id="stage"><canvas id="view" width="960" height="600" tabindex="0"></canvas></div>
+      <div id="gameUI" hidden>
+        <div class="hitv" id="hitv"></div>
+        <div class="scorebar">
+          <span><span class="s cpu" id="sbCpu">15</span><span class="k" id="sbKc">처치 0</span></span>
+          <div class="bar2"><i class="c" id="sbBarC" style="width:50%"></i><i class="g" id="sbBarG" style="width:50%"></i></div>
+          <span><span class="s gpu" id="sbGpu">15</span><span class="k" id="sbKg">처치 0</span></span>
+          <span class="clock" id="sbClock">90</span>
+          <span style="font-size:12px;color:var(--muted)" id="sbSide"></span>
+        </div>
+        <div class="feed" id="feed"></div>
+        <div class="mystat" id="mystat">
+          <span><span class="lbl">목숨</span><span class="hearts" id="msLives"></span></span>
+          <span><span class="lbl">HP</span><span class="hearts" id="msHp"></span></span>
+          <span><span class="lbl">탄약</span> <span class="num" id="msAmmo">0</span></span>
+          <span><span class="lbl">재장전</span><span class="gauge"><i id="msCd"></i></span></span>
+          <span><span class="lbl">warp</span> <span class="num" id="msEff">—</span></span>
+        </div>
+        <div class="deadOv" id="deadOv" hidden><div><div class="muted" style="font-size:13px" id="deadT">쓰러졌습니다</div><div class="big" id="deadN">3</div><div class="muted" style="font-size:12px" id="deadS">초 후 부활</div></div></div>
+        <div class="countdown" id="countdown" hidden><span id="cdN">3</span></div>
+      </div>
+      <!-- 결과 -->
+      <div class="overlay" id="result" hidden>
+        <div class="panel sheet">
+          <div class="win" id="winLine"></div>
+          <div class="lead" id="winSub"></div>
+          <table class="st" id="statTable"></table>
+          <div class="note" id="lesson" style="margin-top:10px"></div>
+          <div class="row" style="margin-top:12px">
+            <button class="btn primary" id="btnSwap">팀 바꿔 다시</button>
+            <button class="btn" id="btnAgain">같은 빌드로 다시</button>
+            <span class="spacer"></span>
+            <button class="btn" id="btnResultLeague">봇 리그 순위</button>
+            <button class="btn" id="btnBack">방으로 돌아가기</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="hud">
+      <div class="panel timer"><div><div class="lbl" id="roundLabel">경기</div><div id="hudNet" class="lbl"></div></div><b id="hudTime">90</b></div>
+      <div class="panel"><div class="panel-title" style="font-size:14px;margin-bottom:4px">내 빌드</div>
+        <div id="hudBuild" style="font-size:12px;color:var(--muted)">—</div>
+        <div><span class="box" id="hudAmmo"></span><span class="box" id="hudEff"></span></div>
+        <div hidden><span id="hudCpu"></span><span id="hudGpu"></span></div>
+      </div>
+      <div class="tp cpu"><h4>A팀 <span class="mono" id="tpCpuL">15</span></h4><div id="tpCpu"></div></div>
+      <div class="tp gpu"><h4>B팀 <span class="mono" id="tpGpuL">15</span></h4><div id="tpGpu"></div></div>
+      <div class="panel controls">
+        <div><kbd>WASD</kbd> 이동 · <kbd>클릭</kbd> 던지기 · <kbd>Shift</kbd> 질주</div>
+        <button class="btn sm" id="btnPause" style="margin-top:4px">일시정지</button> <button class="btn sm" id="btnSound" style="margin-top:4px">🔊 소리 켬</button>
+        <button class="btn sm danger" id="btnQuit" style="margin-top:6px;width:100%">경기 그만두기</button>
+      </div>
+      <div class="panel chat compact" id="gameChatPanel">
+        <div class="chat-list" id="chatGame"></div>
+        <form class="chat-form" id="chatFormGame"><input type="text" maxlength="200" placeholder="메시지"><button class="btn sm" type="submit">보내기</button></form>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ============ 봇 리그 ============ -->
+<div class="screen" id="scrLeague" hidden>
+  <div class="wrap">
+    <div class="topbar">
+      <h1 class="logo small"><span class="a">GPU</span> <span class="b">ARENA</span></h1>
+      <span class="room-title" style="font-family:var(--disp);font-size:24px;color:#fff;text-shadow:0 2px 0 var(--edge)">봇 리그</span>
+      <span class="spacer"></span>
+      <span class="muted" id="leagueWhen" style="color:#eaf6ff;font-size:12px"></span>
+      <button class="btn sm primary" id="btnLeagueRefresh">새로고침</button>
+      <button class="btn sm" id="btnLeagueBack">돌아가기</button>
+    </div>
+    <div class="lobby" style="grid-template-columns:1fr 340px">
+      <div class="panel">
+        <div class="panel-title"><span>순위표</span><small id="leagueMeta"></small></div>
+        <table class="lg" id="leagueTable"></table>
+        <div class="muted" id="leagueEmpty" style="padding:30px;text-align:center" hidden>아직 리그 결과가 없습니다. 선생님 PC에서 <code>node league.js</code> 를 실행하세요.</div>
+        <div class="panel-title" style="margin-top:14px"><span>상성표</span><small>가로 봇이 세로 봇을 이긴 판 수 − 진 판 수. 파랑=이김, 주황=짐</small></div>
+        <div style="overflow-x:auto"><table class="hm" id="leagueHeat"></table></div>
+      </div>
+      <div class="lobby-side">
+        <div class="panel"><div class="panel-title">경기 결과 <small>각 조합 n판 (앞 봇 점수 : 뒤 봇 점수)</small></div><div class="matches" id="leagueMatches"></div></div>
+        <div class="panel" id="leagueAuditPanel"><div class="panel-title">점검 <small>해킹전 탐지</small></div><div id="leagueAudit" style="font-size:12.5px"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 모달 ============ -->
+<div class="modal-backdrop" id="modal" hidden>
+  <div class="panel modal">
+    <div class="panel-title" id="modalTitle"></div>
+    <form class="form" id="modalForm"></form>
+  </div>
+</div>

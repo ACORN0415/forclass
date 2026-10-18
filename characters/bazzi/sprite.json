@@ -1,0 +1,41 @@
+{
+  "fps": 8,
+  "scale": 1.0,
+  "down": [
+    "down_0.png"
+  ],
+  "walk_down": [
+    "down_1.png",
+    "down_2.png",
+    "down_3.png",
+    "down_4.png"
+  ],
+  "up": [
+    "up_0.png"
+  ],
+  "walk_up": [
+    "up_1.png",
+    "up_2.png",
+    "up_3.png",
+    "up_4.png"
+  ],
+  "left": [
+    "left_0.png"
+  ],
+  "walk_left": [
+    "left_1.png",
+    "left_2.png",
+    "left_3.png",
+    "left_4.png"
+  ],
+  "right": [
+    "right_0.png"
+  ],
+  "walk_right": [
+    "right_1.png",
+    "right_2.png",
+    "right_3.png",
+    "right_4.png"
+  ],
+  "shadow": true
+}

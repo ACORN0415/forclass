@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "arena-server",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-X", "utf8", "-u", "arena_server.py", "8000"],
+      "port": 8000
+    },
+    {
+      "name": "arena-server-mac",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-X", "utf8", "-u", "arena_server.py", "8000"],
+      "port": 8000
+    }
+  ]
+}
